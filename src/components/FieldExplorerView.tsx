@@ -35,8 +35,27 @@ export function FieldExplorerView({
 }: FieldExplorerViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [admissionFilter, setAdmissionFilter] = useState('전체');
+  const [groupFilter, setGroupFilter] = useState('전체');
+  const [universityFilter, setUniversityFilter] = useState('전체');
 
   const programs = dataset?.programs ?? [];
+
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (p.universityGroup) set.add(p.universityGroup);
+    });
+    return ['전체', ...Array.from(set)];
+  }, [programs]);
+
+  const availableUniversities = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return;
+      if (p.university) set.add(p.university);
+    });
+    return ['전체', ...Array.from(set)];
+  }, [programs, groupFilter]);
 
   const admissionTypes = useMemo(() => {
     const set = new Set<string>();
@@ -46,36 +65,53 @@ export function FieldExplorerView({
     return ['전체', ...Array.from(set)];
   }, [programs]);
 
+  const availableFields = useMemo(() => {
+    const extra: string[] = [];
+    programs.forEach((p) => {
+      if (
+        p.field &&
+        !(ENGINEERING_FIELDS as readonly string[]).includes(p.field) &&
+        !extra.includes(p.field)
+      ) {
+        extra.push(p.field);
+      }
+    });
+    return [...ENGINEERING_FIELDS, ...extra];
+  }, [programs]);
+
   const fieldCounts = useMemo(() => {
     const counts: Record<string, number> = { 전체: programs.length };
-    ENGINEERING_FIELDS.forEach((f) => {
+    availableFields.forEach((f) => {
       counts[f] = 0;
     });
     programs.forEach((p) => {
-      if (p.field && counts[p.field] !== undefined) {
-        counts[p.field] += 1;
+      if (p.field) {
+        counts[p.field] = (counts[p.field] ?? 0) + 1;
       }
     });
     return counts;
-  }, [programs]);
+  }, [programs, availableFields]);
 
   const filteredPrograms = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return programs.filter((p) => {
       if (selectedField !== '전체' && p.field !== selectedField) return false;
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return false;
+      if (universityFilter !== '전체' && p.university !== universityFilter) return false;
       if (admissionFilter !== '전체' && p.admissionType !== admissionFilter) return false;
       if (q) {
-        const hay = `${p.university ?? ''} ${p.department ?? ''} ${p.field ?? ''} ${p.admissionType ?? ''} ${p.admissionName ?? ''}`.toLowerCase();
+        const hay = `${p.university ?? ''} ${p.universityGroup ?? ''} ${p.department ?? ''} ${p.field ?? ''} ${p.admissionType ?? ''} ${p.admissionName ?? ''}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [programs, selectedField, admissionFilter, searchQuery]);
+  }, [programs, selectedField, groupFilter, universityFilter, admissionFilter, searchQuery]);
 
   const getNearestMilestone = (p: UniversityProgram) => {
     const entries = [
       { label: '원서', raw: p.schedules.application },
       { label: '서류', raw: p.schedules.document },
+      { label: '1단계', raw: p.schedules.stage1Announcement ?? null },
       { label: '면접', raw: p.schedules.interview },
       { label: '발표', raw: p.schedules.announcement },
     ];
@@ -99,7 +135,7 @@ export function FieldExplorerView({
           공대 계열별 대학 및 학과 탐색
         </h1>
         <p className="mt-1 text-sm text-slate-600">
-          9개 공학 계열 중 관심 분야를 선택하면 해당 학과가 개설된 대학의 전형 정보를 카드로 확인할 수 있습니다.
+          관심 공학 계열과 대학 권역(SKY · 인서울 · 지방거점국립대)을 선택하면 대학별 전형 정보를 카드로 확인할 수 있습니다.
         </p>
       </div>
 
@@ -108,7 +144,7 @@ export function FieldExplorerView({
       {/* 9대 학과 계열 선택 바 */}
       <div className="mb-5">
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1" role="tablist" aria-label="학과 계열 선택">
-          {['전체', ...ENGINEERING_FIELDS].map((field) => {
+          {['전체', ...availableFields].map((field) => {
             const active = selectedField === field;
             const count = fieldCounts[field] ?? 0;
             return (
@@ -140,6 +176,51 @@ export function FieldExplorerView({
         <EmptyDataState onOpenJsonModal={onOpenJsonModal} />
       ) : (
         <>
+          {/* 대학 구분 · 대학 선택 */}
+          {availableGroups.length > 1 && (
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                <span className="text-xs font-medium text-slate-500 whitespace-nowrap shrink-0 mr-1">대학 권역</span>
+                {availableGroups.map((grp) => (
+                  <button
+                    key={grp}
+                    type="button"
+                    onClick={() => {
+                      setGroupFilter(grp);
+                      setUniversityFilter('전체');
+                    }}
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                      groupFilter === grp
+                        ? 'bg-slate-900 text-white'
+                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {grp === '지방거점국립대' ? '지방거점국립대(9개교)' : grp}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label htmlFor="explorer-univ-select" className="text-xs font-medium text-slate-500 whitespace-nowrap">
+                  대학 선택
+                </label>
+                <select
+                  id="explorer-univ-select"
+                  value={universityFilter}
+                  onChange={(e) => setUniversityFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 대학 ({availableUniversities.length - 1}개교)</option>
+                  {availableUniversities.slice(1).map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* 검색 및 전형 필터 */}
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1 max-w-md">
@@ -154,25 +235,30 @@ export function FieldExplorerView({
               />
             </div>
 
-            {admissionTypes.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                <span className="text-xs font-medium text-slate-500 whitespace-nowrap shrink-0">전형 필터</span>
-                {admissionTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setAdmissionFilter(type)}
-                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                      admissionFilter === type
-                        ? 'bg-slate-900 text-white'
-                        : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-3 overflow-x-auto no-scrollbar">
+              {admissionTypes.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium text-slate-500 whitespace-nowrap shrink-0">전형 필터</span>
+                  {admissionTypes.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setAdmissionFilter(type)}
+                      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                        admissionFilter === type
+                          ? 'bg-slate-900 text-white'
+                          : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <span className="text-xs text-slate-500 whitespace-nowrap tabular-nums">
+                {filteredPrograms.length}건
+              </span>
+            </div>
           </div>
 
           {filteredPrograms.length === 0 ? (
@@ -199,7 +285,8 @@ export function FieldExplorerView({
                     <div>
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs font-medium text-slate-500 truncate">
-                          {displayValue(p.university)} · {displayValue(p.field)}
+                          {displayValue(p.university)}
+                          {p.universityGroup ? ` · ${p.universityGroup}` : ''} · {displayValue(p.field)}
                         </p>
                         <div className="flex items-center gap-1 shrink-0">
                           <button

@@ -19,11 +19,33 @@ export function ScheduleDdayView({
   onOpenJsonModal,
 }: ScheduleDdayViewProps) {
   const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const [groupFilter, setGroupFilter] = useState('전체');
+  const [universityFilter, setUniversityFilter] = useState('전체');
+
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    (dataset?.programs ?? []).forEach((p) => {
+      if (p.universityGroup) set.add(p.universityGroup);
+    });
+    return Array.from(set);
+  }, [dataset]);
+
+  const availableUniversities = useMemo(() => {
+    const set = new Set<string>();
+    (dataset?.programs ?? []).forEach((p) => {
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return;
+      if (p.university) set.add(p.university);
+    });
+    return Array.from(set);
+  }, [dataset, groupFilter]);
 
   const programs = useMemo(() => {
-    const list = dataset?.programs ?? [];
-    return onlyFavorites ? list.filter((p) => favoriteIds.has(p.id)) : list;
-  }, [dataset, onlyFavorites, favoriteIds]);
+    let list = dataset?.programs ?? [];
+    if (onlyFavorites) list = list.filter((p) => favoriteIds.has(p.id));
+    if (groupFilter !== '전체') list = list.filter((p) => p.universityGroup === groupFilter);
+    if (universityFilter !== '전체') list = list.filter((p) => p.university === universityFilter);
+    return list;
+  }, [dataset, onlyFavorites, favoriteIds, groupFilter, universityFilter]);
 
   const ddayColorClass = (status: string) => {
     if (status === 'today' || status === 'ongoing') return 'text-red-700 font-semibold';
@@ -54,7 +76,7 @@ export function ScheduleDdayView({
               <strong className="font-semibold text-slate-900">일정 안내:</strong> {dataset.scheduleMemo}
             </div>
           )}
-          <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -80,6 +102,43 @@ export function ScheduleDdayView({
                 관심 학과만 ({favoriteIds.size})
               </button>
             </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {availableGroups.length > 0 && (
+                <select
+                  aria-label="대학 권역 필터"
+                  value={groupFilter}
+                  onChange={(e) => {
+                    setGroupFilter(e.target.value);
+                    setUniversityFilter('전체');
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 권역</option>
+                  {availableGroups.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {availableUniversities.length > 1 && (
+                <select
+                  aria-label="대학 필터"
+                  value={universityFilter}
+                  onChange={(e) => setUniversityFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 대학</option>
+                  {availableUniversities.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
           {programs.length === 0 ? (
@@ -95,8 +154,9 @@ export function ScheduleDdayView({
                 const milestones = [
                   { key: 'application', label: '원서 접수', raw: p.schedules.application },
                   { key: 'document', label: '서류 제출', raw: p.schedules.document },
+                  { key: 'stage1Announcement', label: '1단계 발표', raw: p.schedules.stage1Announcement ?? null },
                   { key: 'interview', label: '면접', raw: p.schedules.interview },
-                  { key: 'announcement', label: '발표일', raw: p.schedules.announcement },
+                  { key: 'announcement', label: '최초합격 발표', raw: p.schedules.announcement },
                 ];
 
                 return (
@@ -120,7 +180,7 @@ export function ScheduleDdayView({
                       <CalendarClock className="h-4 w-4 text-slate-400 shrink-0 mt-1" aria-hidden="true" />
                     </div>
 
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                       {milestones.map((m) => {
                         const res = computeDday(m.raw);
                         return (

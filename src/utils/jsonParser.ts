@@ -210,6 +210,13 @@ function parseSchedules(item: Record<string, unknown>) {
         item.서류제출 ??
         item['서류 제출']
     ),
+    stage1Announcement: cleanStr(
+      schedObj.stage1Announcement ??
+        schedObj['1단계발표'] ??
+        schedObj['1단계 발표'] ??
+        item['1단계발표'] ??
+        item['1단계 발표']
+    ),
     interview: cleanStr(
       schedObj.interview ??
         schedObj.면접 ??
@@ -221,10 +228,14 @@ function parseSchedules(item: Record<string, unknown>) {
     announcement: cleanStr(
       schedObj.announcement ??
         schedObj.result ??
+        schedObj.최초합격발표 ??
+        schedObj['최초합격 발표'] ??
+        schedObj.최초발표 ??
         schedObj.발표 ??
         schedObj.발표일 ??
         schedObj.합격자발표 ??
         item.announcementDate ??
+        item.최초합격발표 ??
         item.발표일 ??
         item.합격발표
     ),
@@ -241,6 +252,9 @@ function parseProgram(
   const item = rawItem as Record<string, unknown>;
 
   const university = cleanStr(item.university ?? item.univ ?? item.학교 ?? item.대학 ?? item.대학명);
+  const universityGroup = cleanStr(
+    item.universityGroup ?? item.group ?? item.대학구분 ?? item.구분 ?? item.권역
+  );
   const department = cleanStr(
     item.department ?? item.major ?? item.dept ?? item.학과 ?? item.학과명 ?? item.모집단위
   );
@@ -307,6 +321,7 @@ function parseProgram(
   return {
     id,
     university,
+    universityGroup,
     department,
     field,
     rawField,
@@ -425,25 +440,48 @@ function parseRelationalDataset(obj: Record<string, unknown>): AdmissionDataset 
   const rootYear =
     cleanStr(metaObj.기준 ?? metaObj.기준연도 ?? obj.기준연도 ?? obj.referenceYear) ?? null;
   const sourceParsed = parseSourceField(metaObj.출처 ?? obj.출처 ?? obj.source);
-  const cutoffCaution = cleanStr(metaObj.입결주의);
+  const cutoffCaution = cleanStr(metaObj.입결주의 ?? metaObj.입결);
   const dataGrade = cleanStr(metaObj.자료등급);
   const lastChecked = cleanStr(metaObj.최종확인일);
   const scheduleMemo = cleanStr(metaObj.일정메모);
 
-  const univMap = new Map<string, { name: string | null; link: string | null }>();
+  const univMap = new Map<
+    string,
+    { name: string | null; group: string | null; link: string | null; docSource: string | null }
+  >();
+  const univSourceEntries: string[] = [];
+  const univShortNames: string[] = [];
   if (Array.isArray(obj.대학)) {
     for (const u of obj.대학) {
       if (!u || typeof u !== 'object') continue;
       const uObj = u as Record<string, unknown>;
       const id = cleanStr(uObj.id);
+      const name = cleanStr(uObj.이름 ?? uObj.대학명 ?? uObj.name);
+      const group = cleanStr(uObj.구분 ?? uObj.권역 ?? uObj.group ?? uObj.universityGroup);
+      const link = cleanSafeUrl(uObj.입학처 ?? uObj.url ?? uObj.link);
+      const docSource = cleanStr(uObj.자료 ?? uObj.출처);
       if (id) {
-        univMap.set(id, {
-          name: cleanStr(uObj.이름 ?? uObj.대학명 ?? uObj.name),
-          link: cleanSafeUrl(uObj.입학처 ?? uObj.url ?? uObj.link),
-        });
+        univMap.set(id, { name, group, link, docSource });
+      }
+      if (name && docSource) {
+        univShortNames.push(name);
+        univSourceEntries.push(`${name}: ${docSource}${link ? ` ${link}` : ''}`);
+      } else if (name && link) {
+        univShortNames.push(name);
+        univSourceEntries.push(`${name} 입학처 ${link}`);
       }
     }
   }
+
+  const finalSourceList =
+    sourceParsed.list.length > 0 ? sourceParsed.list : univSourceEntries;
+  const finalSourceSummary =
+    sourceParsed.summary ??
+    (univShortNames.length > 4
+      ? `대학 공식 자료 ${univShortNames.length}개교 (${univShortNames.slice(0, 3).join(' · ')} 외 ${univShortNames.length - 3}개교)`
+      : univShortNames.length > 0
+      ? `대학 공식 문서 ${univShortNames.length}건 (${univShortNames.join(' · ')})`
+      : finalSourceList[0] ?? null);
 
   const admMap = new Map<string, Record<string, unknown>>();
   if (Array.isArray(obj.전형)) {
@@ -463,6 +501,7 @@ function parseRelationalDataset(obj: Record<string, unknown>): AdmissionDataset 
     const univKey = cleanStr(dObj.대학 ?? dObj.대학명);
     const univInfo = univKey ? univMap.get(univKey) : undefined;
     const university = univInfo?.name ?? univKey;
+    const universityGroup = univInfo?.group ?? cleanStr(dObj.구분 ?? dObj.권역 ?? dObj.universityGroup);
     const univLink = univInfo?.link ?? null;
 
     const admKey = cleanStr(dObj.전형 ?? dObj.전형id);
@@ -512,6 +551,7 @@ function parseRelationalDataset(obj: Record<string, unknown>): AdmissionDataset 
     programs.push({
       id: cleanStr(dObj.id) ?? `rel-${idx}-${univKey ?? 'u'}-${department ?? 'd'}-${admKey ?? 'a'}`,
       university,
+      universityGroup,
       department,
       field,
       rawField,
@@ -527,7 +567,7 @@ function parseRelationalDataset(obj: Record<string, unknown>): AdmissionDataset 
       schedules,
       cutoff,
       referenceYear: rootYear,
-      source: sourceParsed.summary,
+      source: univInfo?.docSource ?? finalSourceSummary,
       notes,
     });
   });
@@ -538,13 +578,13 @@ function parseRelationalDataset(obj: Record<string, unknown>): AdmissionDataset 
   const jsonNotices = parseJsonNotices(
     obj.notices ?? obj.news ?? obj.공지사항 ?? obj.입시뉴스,
     rootYear,
-    sourceParsed.summary
+    finalSourceSummary
   );
 
   return {
     referenceYear: rootYear,
-    source: sourceParsed.summary,
-    sourceList: sourceParsed.list,
+    source: finalSourceSummary,
+    sourceList: finalSourceList,
     cutoffCaution,
     dataGrade,
     lastChecked,
@@ -816,8 +856,9 @@ export function buildScheduleAlertsFromJson(dataset: AdmissionDataset | null): N
     }> = [
       { key: 'application', label: '원서 접수' },
       { key: 'document', label: '서류 제출' },
+      { key: 'stage1Announcement', label: '1단계 발표' },
       { key: 'interview', label: '면접' },
-      { key: 'announcement', label: '발표일' },
+      { key: 'announcement', label: '최초합격 발표' },
     ];
 
     for (const m of milestones) {

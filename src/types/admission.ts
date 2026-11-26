@@ -13,10 +13,11 @@ export const ENGINEERING_FIELDS = [
 export type EngineeringField = (typeof ENGINEERING_FIELDS)[number];
 
 export interface ScheduleMilestones {
-  application: string | null;   // 원서 접수
-  document: string | null;      // 서류 제출
-  interview: string | null;     // 면접
-  announcement: string | null;  // 발표일
+  application: string | null;          // 원서 접수
+  document: string | null;             // 서류 제출
+  stage1Announcement?: string | null;  // 1단계 발표
+  interview: string | null;            // 면접
+  announcement: string | null;         // 발표일 (최초합격발표)
 }
 
 export interface CutoffInfo {
@@ -36,6 +37,7 @@ export interface CutoffInfo {
 export interface UniversityProgram {
   id: string;
   university: string | null;
+  universityGroup?: string | null; // 대학 구분 (예: SKY, 인서울, 지방거점국립대)
   department: string | null;
   field: EngineeringField | string | null;
   rawField: string | null;

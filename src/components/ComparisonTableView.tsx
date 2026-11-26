@@ -33,8 +33,41 @@ export function ComparisonTableView({
 }: ComparisonTableViewProps) {
   const [scope, setScope] = useState<CompareScope>(compareIds.size > 0 ? 'selected' : 'all');
   const [fieldFilter, setFieldFilter] = useState('전체');
+  const [groupFilter, setGroupFilter] = useState('전체');
+  const [universityFilter, setUniversityFilter] = useState('전체');
 
   const programs = dataset?.programs ?? [];
+
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (p.universityGroup) set.add(p.universityGroup);
+    });
+    return Array.from(set);
+  }, [programs]);
+
+  const availableUniversities = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return;
+      if (p.university) set.add(p.university);
+    });
+    return Array.from(set);
+  }, [programs, groupFilter]);
+
+  const availableFields = useMemo(() => {
+    const extra: string[] = [];
+    programs.forEach((p) => {
+      if (
+        p.field &&
+        !(ENGINEERING_FIELDS as readonly string[]).includes(p.field) &&
+        !extra.includes(p.field)
+      ) {
+        extra.push(p.field);
+      }
+    });
+    return [...ENGINEERING_FIELDS, ...extra];
+  }, [programs]);
 
   const targetPrograms = useMemo(() => {
     let base = programs;
@@ -43,11 +76,17 @@ export function ComparisonTableView({
     } else if (scope === 'favorites') {
       base = programs.filter((p) => favoriteIds.has(p.id));
     }
+    if (groupFilter !== '전체') {
+      base = base.filter((p) => p.universityGroup === groupFilter);
+    }
+    if (universityFilter !== '전체') {
+      base = base.filter((p) => p.university === universityFilter);
+    }
     if (fieldFilter !== '전체') {
       base = base.filter((p) => p.field === fieldFilter);
     }
     return base;
-  }, [programs, scope, compareIds, favoriteIds, fieldFilter]);
+  }, [programs, scope, compareIds, favoriteIds, groupFilter, universityFilter, fieldFilter]);
 
   return (
     <section aria-labelledby="compare-heading">
@@ -116,18 +155,51 @@ export function ComparisonTableView({
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <label htmlFor="compare-field-select" className="text-xs font-medium text-slate-500 whitespace-nowrap">
-                계열 필터
-              </label>
+            <div className="flex flex-wrap items-center gap-2">
+              {availableGroups.length > 0 && (
+                <select
+                  aria-label="대학 권역 필터"
+                  value={groupFilter}
+                  onChange={(e) => {
+                    setGroupFilter(e.target.value);
+                    setUniversityFilter('전체');
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 권역</option>
+                  {availableGroups.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {availableUniversities.length > 1 && (
+                <select
+                  aria-label="대학 필터"
+                  value={universityFilter}
+                  onChange={(e) => setUniversityFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 대학</option>
+                  {availableUniversities.map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
                 id="compare-field-select"
+                aria-label="계열 필터"
                 value={fieldFilter}
                 onChange={(e) => setFieldFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
               >
                 <option value="전체">전체 계열</option>
-                {ENGINEERING_FIELDS.map((f) => (
+                {availableFields.map((f) => (
                   <option key={f} value={f}>
                     {f}
                   </option>

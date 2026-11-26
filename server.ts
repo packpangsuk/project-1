@@ -63,9 +63,45 @@ async function startServer() {
         return;
       }
 
-      const compactPrograms = programs.slice(0, 60).map((p: Record<string, unknown>) => ({
+      const rawPrograms = programs as Array<Record<string, unknown>>;
+      const preferredList = Array.isArray(preferredFields)
+        ? preferredFields.filter((f): f is string => typeof f === 'string' && f.trim().length > 0)
+        : [];
+
+      const fieldFiltered =
+        preferredList.length > 0
+          ? rawPrograms.filter((p) => preferredList.includes(String(p.field ?? '')))
+          : rawPrograms;
+      const candidatePool = fieldFiltered.length > 0 ? fieldFiltered : rawPrograms;
+
+      // Round-robin across universities so SKY, In-Seoul, and Flagship National universities are all represented
+      const buckets = new Map<string, Array<Record<string, unknown>>>();
+      for (const p of candidatePool) {
+        const key = String(p.university ?? 'unknown');
+        const arr = buckets.get(key) ?? [];
+        arr.push(p);
+        buckets.set(key, arr);
+      }
+      const balanced: Array<Record<string, unknown>> = [];
+      const bucketLists = Array.from(buckets.values());
+      let roundIdx = 0;
+      while (balanced.length < 150) {
+        let addedInRound = false;
+        for (const list of bucketLists) {
+          if (roundIdx < list.length) {
+            balanced.push(list[roundIdx]);
+            addedInRound = true;
+            if (balanced.length >= 150) break;
+          }
+        }
+        if (!addedInRound) break;
+        roundIdx++;
+      }
+
+      const compactPrograms = balanced.map((p) => ({
         id: p.id,
         university: p.university ?? '정보 없음',
+        universityGroup: p.universityGroup ?? null,
         department: p.department ?? '정보 없음',
         field: p.field ?? '정보 없음',
         admissionType: p.admissionType ?? '정보 없음',

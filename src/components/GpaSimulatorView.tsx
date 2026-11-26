@@ -29,6 +29,8 @@ export function GpaSimulatorView({
 }: GpaSimulatorViewProps) {
   const [selectedProgramId, setSelectedProgramId] = useState<string>('');
   const [fieldFilter, setFieldFilter] = useState<string>('전체');
+  const [groupFilter, setGroupFilter] = useState<string>('전체');
+  const [universityFilter, setUniversityFilter] = useState<string>('전체');
   const [csat, setCsat] = useState<CsatGradesInput>({
     korean: 2,
     math: 2,
@@ -53,10 +55,45 @@ export function GpaSimulatorView({
 
   const programs = dataset?.programs ?? [];
 
+  const availableGroups = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (p.universityGroup) set.add(p.universityGroup);
+    });
+    return Array.from(set);
+  }, [programs]);
+
+  const availableUniversities = useMemo(() => {
+    const set = new Set<string>();
+    programs.forEach((p) => {
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return;
+      if (p.university) set.add(p.university);
+    });
+    return Array.from(set);
+  }, [programs, groupFilter]);
+
+  const availableFields = useMemo(() => {
+    const extra: string[] = [];
+    programs.forEach((p) => {
+      if (
+        p.field &&
+        !(ENGINEERING_FIELDS as readonly string[]).includes(p.field) &&
+        !extra.includes(p.field)
+      ) {
+        extra.push(p.field);
+      }
+    });
+    return [...ENGINEERING_FIELDS, ...extra];
+  }, [programs]);
+
   const filteredPrograms = useMemo(() => {
-    if (fieldFilter === '전체') return programs;
-    return programs.filter((p) => p.field === fieldFilter);
-  }, [programs, fieldFilter]);
+    return programs.filter((p) => {
+      if (groupFilter !== '전체' && p.universityGroup !== groupFilter) return false;
+      if (universityFilter !== '전체' && p.university !== universityFilter) return false;
+      if (fieldFilter !== '전체' && p.field !== fieldFilter) return false;
+      return true;
+    });
+  }, [programs, groupFilter, universityFilter, fieldFilter]);
 
   const activeTargetProgram = useMemo(() => {
     if (programs.length === 0) return null;
@@ -359,19 +396,56 @@ export function GpaSimulatorView({
                 </h2>
               </div>
 
-              <select
-                value={fieldFilter}
-                onChange={(e) => setFieldFilter(e.target.value)}
-                aria-label="계열 필터"
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
-              >
-                <option value="전체">전체 계열</option>
-                {ENGINEERING_FIELDS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                {availableGroups.length > 0 && (
+                  <select
+                    value={groupFilter}
+                    onChange={(e) => {
+                      setGroupFilter(e.target.value);
+                      setUniversityFilter('전체');
+                    }}
+                    aria-label="대학 권역 필터"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                  >
+                    <option value="전체">전체 권역</option>
+                    {availableGroups.map((g) => (
+                      <option key={g} value={g}>
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {availableUniversities.length > 1 && (
+                  <select
+                    value={universityFilter}
+                    onChange={(e) => setUniversityFilter(e.target.value)}
+                    aria-label="대학 필터"
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                  >
+                    <option value="전체">전체 대학</option>
+                    {availableUniversities.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <select
+                  value={fieldFilter}
+                  onChange={(e) => setFieldFilter(e.target.value)}
+                  aria-label="계열 필터"
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-blue-600 focus:outline-none"
+                >
+                  <option value="전체">전체 계열</option>
+                  {availableFields.map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">

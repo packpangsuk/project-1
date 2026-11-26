@@ -24,8 +24,9 @@ export function ProgramDetailModal({
   const scheduleRows = [
     { label: '원서 접수', raw: program.schedules.application },
     { label: '서류 제출', raw: program.schedules.document },
+    { label: '1단계 발표', raw: program.schedules.stage1Announcement ?? null },
     { label: '면접', raw: program.schedules.interview },
-    { label: '발표일', raw: program.schedules.announcement },
+    { label: '최초합격 발표', raw: program.schedules.announcement },
   ];
 
   return (

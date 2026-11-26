@@ -24,7 +24,7 @@ import userDefaultData from './data/userAdmissions2027.json';
 const DEFAULT_ADMISSIONS_RAW_JSON = JSON.stringify(userDefaultData, null, 2);
 
 const STORAGE_KEYS = {
-  RAW_JSON: 'gongdae_raw_json_v4',
+  RAW_JSON: 'gongdae_raw_json_v7',
   FAVORITES: 'gongdae_favorites_v1',
   COMPARE: 'gongdae_compare_v1',
   CHECKLIST: 'gongdae_checklist_v1',
